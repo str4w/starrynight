@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import optimize
 from skimage import filters
+from skimage.morphology import disk as mcircle
+from skimage.filters import rank
 import bz2
 import zlib
 import base64
@@ -61,7 +63,7 @@ def regularizer(params,orig):
         c2=(c1[0]+circles[2+i],c1[1]+circles[3+i])
         d=max(distanceFromBoxSquared(c1,(0,0),(orig.shape[1]-1,orig.shape[0]-1)),
               distanceFromBoxSquared(c2,(0,0),(orig.shape[1]-1,orig.shape[0]-1)))
-        r=circles[7]
+        r=circles[6]
         if d>r*r:
             return 1000
     return 0
@@ -72,7 +74,39 @@ class artist:
         self.shape=img.shape
         self.dtype=img.dtype
         self.cache=dict()
-        
+        # create color subspace
+        C=np.cov(orig.reshape(orig.shape[0]*orig.shape[1],3).T)
+        eigenvalues,eigenvectors=np.linalg.eig(C)
+        repack=sorted([(eigenvalues[i],eigenvectors[:,i]) for i in range(3) ],key=lambda x:-x[0],)
+        R=np.array([v[1] for v in repack])
+        self.mtx=R[0:2,:]
+        self.meancolor=np.round(np.mean(img,(0,1)))
+        meanoutimage=img.astype(np.int)-self.meancolor
+        testimage=np.dot(self.mtx,(meanoutimage.reshape(img.shape[0]*img.shape[1],3).T*1.)).T
+
+        self.org=np.array([[np.min(testimage[:,0]),np.min(testimage[:,1])]])
+        self.scl=np.array([99./(np.max(testimage[:,0])-np.min(testimage[:,0])),99./(np.max(testimage[:,1])-np.min(testimage[:,1]))])
+
+        scaledimage=np.round((testimage-self.org)*self.scl)
+
+        assert(np.max(scaledimage)<100)
+        assert(np.min(scaledimage)>=0)
+
+        self.roff=np.round(np.dot(R.T[:,0:2],self.org.reshape(2,1))+self.meancolor.reshape(3,1)).astype(np.int).reshape(3)
+
+        tmp=R.T[:,0:2].copy()
+        tmp[:,0]/=self.scl[0]
+        tmp[:,1]/=self.scl[1]
+        self.rmtx=np.round(tmp,1)  #).astype(np.int)
+
+    def toColorSubspace(self,color):
+        assert(len(color)==3)
+        z=np.round((np.dot(self.mtx,(color-self.meancolor).reshape(3,1))-self.org)*self.scl)
+        return (z[0,0],z[1,0])
+    def fromColorSubspace(self,color): 
+        assert(len(color)==2)
+        return np.clip(np.dot(self.rmtx,np.array(color).reshape(2,1)).reshape(3)+self.roff,0,255)
+
     def doit(self,params):
         #print params
         # params 0, split level
@@ -88,7 +122,7 @@ class artist:
                si=params[0] #np.floor(s)
                #mantissa=s-si
                img[:si,:,c]=params[c+1]
-               img[si:,:,c]=params[c+2]
+               img[si:,:,c]=params[c+4]
             self.cache[-1]=(params[0:8],img.copy())
                #img[si+1:,:,c]=c2
            #img[si,:,c]=c1*mantissa+c2*(1.-mantissa)
@@ -105,17 +139,18 @@ class artist:
             circ=circles[i:i+8]
             if i in self.cache and self.cache[i][0]==circ:
                 img=self.cache[i][1]
+                #print "Usingn cache for",circ
             else:
-            #print "circle",circles[i:i+8]
+                #print "circ",circ
                 for k in self.cache.keys():
                     if k>=i:
                         del self.cache[k]
                 img=img.copy()
-                cv2.circle(img,(circ[0],circ[1]),circ[7],(circ[4],circ[5],circ[6]),-1)
+                cv2.circle(img,(circ[0],circ[1]),circ[7],self.fromColorSubspace(self.toColorSubspace(circ[4:7])),-1)
                 for j in range(31):
                     r=circ[0]+circ[2]*j//30 
                     c=circ[1]+circ[3]*j//30 
-                    cv2.circle(img,(r,c),circ[7],(circ[4],circ[5],circ[6]),-1)
+                    cv2.circle(img,(r,c),circ[7],self.fromColorSubspace(self.toColorSubspace(circ[4:7])),-1)
                 self.cache[i]=(circ,img.copy())
     #        for row in range(max(0,int(circles[0+i]-circles[2+i])-3),min(img.shape[0],int(circles[0+i]+circles[2+i])+3)):
     #           for col in range(max(0,int(circles[1+i]-circles[2+i])-3),min(img.shape[1],int(circles[1+i]+circles[2+i])+3)):
@@ -145,14 +180,15 @@ class artist:
                 s+=","
             #print "s:",s
             #print tuple(xopt[i:i+6])
-            s+="(%d,%d,%d,%d,%d,%d,%d,%d)"%tuple(circles[i:i+8])
+            c=self.toColorSubspace(circles[i+4:i+7])
+            s+="(%d,%d,%d,%d,%d,%d,%d)"%(circles[i],circles[i+1],circles[i+2],circles[i+3],c[0],c[1],circles[i+7])
         prg ="import cv2,numpy as n\n"
         prg+="z=n.ones((320,386,3),n.uint8)\n"
         prg+="z[:,:,:]=(%d,%d,%d)\n"%(xopt[1],xopt[2],xopt[3])
         prg+="z[%d:,:,:]=(%d,%d,%d)\n"%(xopt[0],xopt[4],xopt[5],xopt[6])
-        prg+="for p,q,x,y,c,d,e,r in [%s]:\n"%s
+        prg+="for p,q,x,y,c,d,r in [%s]:\n"%s
         prg+=" for k in range(31):\n"
-        prg+="  cv2.circle(z,(p+x*k/30,q+y*k/30),r,(c,d,e),-1)\n"
+        prg+="  cv2.circle(z,(p+x*k/30,q+y*k/30),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
         if not blurSize is None:
           prg+="cv2.imwrite('a.png',cv2.blur(z,(%d,%d)))\n"%(blurSize,blurSize)
         else:
@@ -308,41 +344,100 @@ def run(outdir,orig,params0,bounds,iterations):
             z=np.sum(np.abs(filters.gaussian_filter(z,filtersize,mode='constant',cval=-shift/scale)*scale+shift)**2,2)
             z=z/np.max(z)
             cv2.imwrite(outdir+'/error_%03d_postfilter.png'%(q+2),z*255)
+            idx0=np.unravel_index(np.argmax(z),z.shape)
             
-            z=np.sum((img.astype(np.float32)-orig.astype(np.float32))**2,2)
-            z=z/np.max(z)
-            z=filters.gaussian_filter(z,filtersize,mode='constant')
-            cv2.imwrite(outdir+'/error_%03d_oldfilter.png'%(q+2),z*255)
+#            z=img.astype(np.int)-orig.astype(np.int)
+#            zsq=z**2
+#            filt=mcircle(filtersize)
+#            zzsum=np.zeros_like(z)
+#            zzsumsq=np.zeros_like(z)
+#            for q in range(3):
+#               zzsum[:,:,q]=rank.sum(z[:,:,q],filt)
+#               zzsumsq[:,:,q]=rank.sum(zsq[:,:,q],filt)
+#            zzz=np.sum(zzsumsq-2./np.sum(filt)*zzsumsq*zzsum -zzsum,2).astype(np.float32)
+#            zzz=zzz-np.min(zzz)
+#            zzz=zzz/np.max(zzz)
+#            idx=np.unravel_index(np.argmax(zzz),zzz.shape)
+#            cv2.imwrite(outdir+'/error_%03d_postfilter.png'%(q+2),zzz*255)
+                        
+            
+            #z=np.sum(np.abs(filters.gaussian_filter(z,filtersize,mode='constant',cval=-shift/scale)*scale+shift)**2,2)
+            #z=z/np.max(z)
+            #cv2.imwrite(outdir+'/error_%03d_postfilter.png'%(q+2),z*255)
+
+            #idx=np.unravel_index(np.argmax(z),z.shape)
+            
+#            z=np.sum((img.astype(np.float32)-orig.astype(np.float32))**2,2)
+#            z=z/np.max(z)
+#            z=filters.gaussian_filter(z,filtersize,mode='constant')
+#            cv2.imwrite(outdir+'/error_%03d_oldfilter.png'%(q+2),z*255)
+#            idx1=np.unravel_index(np.argmax(z),z.shape)
+#            print idx0,idx1
+#        
         
-            idx=np.unravel_index(np.argmax(z),z.shape)
-            params0=list(xopt)
+            params0=xopt[:]
+#            params1=xopt[:]
+#            bounds0=bounds[:]
+#            bounds1=bounds[:]
             include=[False,]*len(params0)
-            params0.append(idx[1])
-            bounds.append((idx[1]-30,idx[1]+30))
+
+            params0.append(idx0[1])
+            bounds.append((idx0[1]-30,idx0[1]+30))
             include.append(True)
-            params0.append(idx[0])
-            bounds.append((idx[0]-30,idx[0]+30))
-            include.append(True)
-            params0.append(0)
-            bounds.append((-30,+30))
+            params0.append(idx0[0])
+            bounds.append((idx0[0]-30,idx0[0]+30))
             include.append(True)
             params0.append(0)
             bounds.append((-30,+30))
             include.append(True)
-            params0.append(float(orig[idx[0],idx[1],0]))
-            bounds.append((imgmin[0],imgmax[0]))
+            params0.append(0)
+            bounds.append((-30,+30))
             include.append(True)
-            params0.append(float(orig[idx[0],idx[1],1]))
-            bounds.append((imgmin[1],imgmax[1]))
+            c=orig[idx0[0],idx0[1],:]
+            params0.append(float(c[0]))
+            bounds.append((0,255))
             include.append(True)
-            params0.append(float(orig[idx[0],idx[1],2]))
-            bounds.append((imgmin[2],imgmax[2]))
+            params0.append(float(c[1]))
+            bounds.append((0,255))
             include.append(True)
-            params0.append(6)
+            params0.append(float(c[2]))
+            bounds.append((0,255))
+            include.append(True)
+            params0.append(11)
             bounds.append((1,50))
             include.append(True)
-            xopt=localopt(optimizeme,params0,bounds,include,5)
-            xopt=localopt(optimizeme,xopt,bounds,[True,]*len(bounds),1)
+            xopt0=localopt(optimizeme,params0,bounds,include,5)
+            
+#            params1.append(idx1[1])
+#            bounds1.append((idx1[1]-30,idx1[1]+30))
+#            params1.append(idx1[0])
+#            bounds1.append((idx1[0]-30,idx1[0]+30))
+#            params1.append(0)
+#            bounds1.append((-30,+30))
+#            params1.append(0)
+#            bounds1.append((-30,+30))
+#            c=anArtist.toColorSubspace(orig[idx1[0],idx1[1],:])
+#            params1.append(c[0])
+#            bounds1.append((0,99))
+#            params1.append(c[1])
+#            bounds1.append((0,99))
+#            params1.append(11)
+#            bounds1.append((1,50))
+#            xopt1=localopt(optimizeme,params1,bounds1,include,5)
+#
+#            img=anArtist.doit(xopt0)
+#            s0=score(img,orig)
+#            img=anArtist.doit(xopt1)
+#            s1=score(img,orig)
+            
+#            if s0<s1:
+#                xopt=xopt0
+#                bounds=bounds0
+#            else:
+#                xopt=xopt1
+#                bounds=bounds1
+
+            xopt=localopt(optimizeme,xopt0,bounds,[True,]*len(bounds),1)
     
             
             xtry=xopt[:-8]
@@ -395,18 +490,18 @@ def run(outdir,orig,params0,bounds,iterations):
 orig=cv2.imread('ORIGINAL.png')
 mval=np.mean(orig,(0,1))
 
-params0=[orig.shape[0]//2,int(mval[0]),int(mval[1]),int(mval[2]),int(mval[0]),int(mval[1]),int(mval[2]), 5, 94, 267, 0, -10, 30, 43, 43, 38]
-bounds=[(1,orig.shape[0]),(0,255),(0,255),(0,255),(0,255),(0,255),(0,255),(1,10), (94-20,94+20),(267-20,267+20),(-30,30),(-30,30),(3,50),(0,255),(0,255),(0,255)]
+params0=[orig.shape[0]//2,int(mval[0]),int(mval[1]),int(mval[2]),int(mval[0]),int(mval[1]),int(mval[2]), 5, 94, 267, 0, -10, 43, 43, 38, 30]
+bounds=[(1,orig.shape[0]),(0,255),(0,255),(0,255),(0,255),(0,255),(0,255),(1,10), (94-20,94+20),(267-20,267+20),(-30,30),(-30,30),(0,255),(0,255),(0,255),(3,50)]
 
-x,b=run("outwithblurbrushv5",orig,params0,bounds,120)
-
-
-params0=[orig.shape[0]//2,int(mval[0]),int(mval[1]),int(mval[2]),int(mval[0]),int(mval[1]),int(mval[2]), 94, 267, 0, -10, 30, 43, 43, 38]
-bounds=[(1,orig.shape[0]),(0,255),(0,255),(0,255),(0,255),(0,255),(0,255), (94-20,94+20),(267-20,267+20),(-30,30),(-30,30),(3,50),(0,255),(0,255),(0,255)]
-run("outnoblurbrushv5",orig,params0,bounds,120)
+x,b=run("outwithblurbrushv6",orig,params0,bounds,120)
 
 
-run("outremoveblurbrushv5",orig,x[:7]+x[8:],b[:7]+b[8:],2)
+params0=[orig.shape[0]//2,int(mval[0]),int(mval[1]),int(mval[2]),int(mval[0]),int(mval[1]),int(mval[2]), 94, 267, 0, -10, 43, 43, 38, 30]
+bounds=[(1,orig.shape[0]),(0,255),(0,255),(0,255),(0,255),(0,255),(0,255), (94-20,94+20),(267-20,267+20),(-30,30),(-30,30),(0,255),(0,255),(0,255),(3,50)]
+run("outnoblurbrushv6",orig,params0,bounds,120)
+
+
+run("outremoveblurbrushv6",orig,x[:7]+x[8:],b[:7]+b[8:],2)
 
 
 
