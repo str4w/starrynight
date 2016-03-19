@@ -380,7 +380,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
     for q in range(iterations):
         lastscore=s
         itercount=0
-        filtersize=3
+        filtersize=10
         while itercount<10:
             img=anArtist.doit(xopt)
             z=img.astype(np.float32)-orig.astype(np.float32)
@@ -473,7 +473,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
 
 sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
-pfd=open("foundparamsv9.txt")
+pfd=open("foundparamsv10_2.txt")
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -501,8 +501,8 @@ anArtist=artist(orig)
 
 
 #anArtist.doit(x)
-for tries in range(3):
-    x,b=searchForParameters("outputv10_%d"%tries,orig,params,bounds,10)
+for tries in range(2):
+    x,b=searchForParameters("outputv11_%d"%tries,orig,params,bounds,10)
     baseparams=x[:8]
     circles=[x[i:i+8] for i in range(8,len(x),8)]
     basebounds=b[:8]
@@ -562,7 +562,7 @@ for tries in range(3):
                 break
             
     
-    pfd=open("foundparamsv10_%d.txt"%tries,'w')
+    pfd=open("foundparamsv11_%d.txt"%tries,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
