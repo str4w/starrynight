@@ -380,7 +380,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
     for q in range(iterations):
         lastscore=s
         itercount=0
-        filtersize=10
+        filtersize=1
         while itercount<10:
             img=anArtist.doit(xopt)
             z=img.astype(np.float32)-orig.astype(np.float32)
@@ -482,6 +482,12 @@ pfd.close()
 exec("params="+xstr)
 exec("bounds="+bstr)
 anArtist=artist(orig)
+z=anArtist.doit(params)
+s=score(z,orig)
+params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
+z=anArtist.doit(params)
+s2=score(z,orig)
+print "Started with score",s,"optimized to",s2
 
 
 #mval=np.mean(orig,(0,1))
@@ -502,7 +508,7 @@ anArtist=artist(orig)
 
 #anArtist.doit(x)
 for tries in range(2):
-    x,b=searchForParameters("outputv11_%d"%tries,orig,params,bounds,10)
+    x,b=searchForParameters("outputv12_%d"%tries,orig,params,bounds,20)
     baseparams=x[:8]
     circles=[x[i:i+8] for i in range(8,len(x),8)]
     basebounds=b[:8]
@@ -562,7 +568,7 @@ for tries in range(2):
                 break
             
     
-    pfd=open("foundparamsv11_%d.txt"%tries,'w')
+    pfd=open("foundparamsv12_%d.txt"%tries,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
