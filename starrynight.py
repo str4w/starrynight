@@ -534,13 +534,16 @@ def optimizeme(p):
 filtersize=5
 tries=0
 f=5
-for sizelimit in [1024,]:
+once=False
+for sizelimit in [980,1024,]:
     for f in [1,]:
         filtersize=f
 #        for tries in range(2):
         x=params[:]
         b=bounds[:]
-        x,b=searchForParameters("outputv22_%d_%d"%(tries,f),orig,params,bounds,100)
+        if once:
+           x,b=searchForParameters("outputv23_%d_%d"%(tries,f),orig,params,bounds,100)
+        once=True
         baseparams=x[:8]
         circles=[x[i:i+8] for i in range(8,len(x),8)]
         basebounds=b[:8]
@@ -598,7 +601,7 @@ for sizelimit in [1024,]:
             
         print "--------------------------------------------------------------"
         includeCircle=[True]*len(circles)
-        for i in range(len(circles)/2):
+        for i in range(len(circles)):
             r=np.argmin(deltas)
             print "removing circle",r,"diff",deltas[r]
             olddelta=deltas[r]
@@ -630,12 +633,12 @@ for sizelimit in [1024,]:
                 bounds.extend(bcircle[c])
                   
             
-        pfd=open("foundparamsv22_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv23_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
         params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-        pfd=open("foundparamsv22final_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv23final_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
@@ -644,11 +647,11 @@ for sizelimit in [1024,]:
         zprg=compressProgram(prg)
         print "Achieved final score:",s
         print "In program of size:",len(zprg)
-        if len(zprg) <= 1024:
-            fd=open("draw_finalv22_%d_%d.py"%(f,sizelimit),'w')
+        if len(zprg) <= sizelimit:
+            fd=open("draw_finalv23_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,prg,
             fd.close()
-            fd=open("cdraw_finalv22_%d_%d.py"%(f,sizelimit),'w')
+            fd=open("cdraw_finalv23_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,zprg,
             fd.close()
         break
