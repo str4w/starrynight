@@ -243,7 +243,7 @@ def integerOptimize1D(f,low,high,step):
 # search through parameters one by one, performing 1D optimize for each one
 # authorized by include, within limits of bounds     
 def localopt(f,params,bounds,include,step):
-    #print "Optimizing ",len(params),"parameters"
+    print "Optimizing ",sum(include),"/",len(params),"parameters"
     assert(len(bounds)==len(params))
     assert(len(include)==len(params))
     lparams=params[:]
@@ -255,7 +255,7 @@ def localopt(f,params,bounds,include,step):
         stepped=False
         for i in range(len(lparams)):
            if include[i]:
-               print "Optimizing parameter",i
+               #print "Optimizing parameter",i
                p=lparams[i]
                def loc(z):
                    par=lparams[:]
@@ -266,7 +266,7 @@ def localopt(f,params,bounds,include,step):
                p2,v2=integerOptimize1D(loc,l,h,step)
                if v2<cv:
                    cv=v2
-                   print "---score",v2
+                   #print "---score",v2
                    stepped=True
                    lparams[i]=p2
                    if p2==l or p2==h:
@@ -496,7 +496,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
 
 sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
-pfd=open("foundparamsv16final_1.txt") #4882
+pfd=open("foundparamsv24final_10_1024.txt") #4760
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -504,48 +504,48 @@ pfd.close()
 #exec("b="+bstr)
 exec("params="+xstr)
 exec("bounds="+bstr)
-baseparams=params[:8]
-circles=[params[i:i+8] for i in range(8,len(params),8)]
-basebounds=bounds[:8]
-bcircle=[bounds[i:i+8] for i in range(8,len(bounds),8)]
+#baseparams=params[:8]
+#circles=[params[i:i+8] for i in range(8,len(params),8)]
+#basebounds=bounds[:8]
+#bcircle=[bounds[i:i+8] for i in range(8,len(bounds),8)]
 
-print "There are %d circles"%len(circles)
-for i in range(len(circles)):
-    for j in [0,1,2,3,7]:
-        if circles[i][j]<=bcircle[i][j][0] or circles[i][j]>=bcircle[i][j][1]:
-            print "Circle %d hits bounds on element %d"%(i,j)
-            for k in range(8):
-                print circles[i][k],bcircle[i][k]
-            break
-
-
-baseparams=params[:8]
-circles=[[params[i]+params[i+2]//2,params[i+1]+params[i+3]//2,params[i+2],params[i+3],params[i+4],params[i+5],params[i+6],params[i+7]] for i in range(8,len(bounds),8)]
-newparams=baseparams[:]
-for c in circles:
-    newparams.extend(c)
-params=newparams
-
-basebounds=bounds[:8]
-bcircle2=[[(-60,orig.shape[1]+60),(-60,orig.shape[0]+60),(-60,60),(-60,60),(0,255),(0,255),(0,255),(1,255)] for i in range(8,len(bounds),8)]
-newbounds=basebounds[:]
-for b in bcircle2:
-    newbounds.extend(b)
-bounds=newbounds
+#print "There are %d circles"%len(circles)
+#for i in range(len(circles)):
+#    for j in [0,1,2,3,7]:
+#        if circles[i][j]<=bcircle[i][j][0] or circles[i][j]>=bcircle[i][j][1]:
+#            print "Circle %d hits bounds on element %d"%(i,j)
+#            for k in range(8):
+#                print circles[i][k],bcircle[i][k]
+#            break
+#
+#
+#baseparams=params[:8]
+#circles=[[params[i]+params[i+2]//2,params[i+1]+params[i+3]//2,params[i+2],params[i+3],params[i+4],params[i+5],params[i+6],params[i+7]] for i in range(8,len(bounds),8)]
+#newparams=baseparams[:]
+#for c in circles:
+#    newparams.extend(c)
+#params=newparams
+#
+#basebounds=bounds[:8]
+#bcircle2=[[(-60,orig.shape[1]+60),(-60,orig.shape[0]+60),(-60,60),(-60,60),(0,255),(0,255),(0,255),(1,255)] for i in range(8,len(bounds),8)]
+#newbounds=basebounds[:]
+#for b in bcircle2:
+#    newbounds.extend(b)
+#bounds=newbounds
 
 
 anArtist=artist(orig)
 z=anArtist.doit(params)
 s=score(z,orig)
 print "Starting with score:",s
-prg=anArtist.makeProgram(params)
-zprg=compressProgram(prg)
-fd=open("draw_origv24.py",'w')
-print >>fd,prg,
-fd.close()
-fd=open("cdraw_origv24.py",'w')
-print >>fd,zprg,
-fd.close()
+#prg=anArtist.makeProgram(params)
+#zprg=compressProgram(prg)
+#fd=open("draw_origv25.py",'w')
+#print >>fd,prg,
+#fd.close()
+#fd=open("cdraw_origv25.py",'w')
+#print >>fd,zprg,
+#fd.close()
 
 
 
@@ -553,21 +553,21 @@ def optimizeme(p):
    img=anArtist.doit(p)
    s=score(img,orig)+regularizer(p,orig)
    return s  
-params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-z=anArtist.doit(params)
-s=score(z,orig)
-print "first optimization got score:",s
-pfd=open("foundparamsv24.txt",'w')
-print >>pfd,params
-print >>pfd,bounds
-pfd.close()
+#params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
+#z=anArtist.doit(params)
+#s=score(z,orig)
+#print "first optimization got score:",s
+#pfd=open("foundparamsv25.txt",'w')
+#print >>pfd,params
+#print >>pfd,bounds
+#pfd.close()
 #
-for sizelimit in [1100,1024]:
-    for f in [20,10]:
+for sizelimit in [1024]:
+    for f in [5,1]:
         filtersize=f
         for tries in range(1):
             x=params[:]
-            x,b=searchForParameters("outputv24_%d_%d"%(tries,f),orig,params,bounds,50)
+            x,b=searchForParameters("outputv25_%d_%d"%(tries,f),orig,params,bounds,40)
             baseparams=x[:8]
             circles=[x[i:i+8] for i in range(8,len(x),8)]
             basebounds=b[:8]
@@ -623,12 +623,12 @@ for sizelimit in [1100,1024]:
                     bounds.extend(bcircle[c])
                     
             
-        pfd=open("foundparamsv24_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv25_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
         params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-        pfd=open("foundparamsv24final_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv25final_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
@@ -638,9 +638,9 @@ for sizelimit in [1100,1024]:
         print "Achieved final score:",s
         print "In program of size:",len(zprg)
         if len(zprg) <= 1024:
-            fd=open("draw_finalv24_%d_%d.py"%(f,sizelimit),'w')
+            fd=open("draw_finalv25_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,prg,
             fd.close()
-            fd=open("cdraw_finalv24_%d_%d.py"%(f,sizelimit),'w')
+            fd=open("cdraw_finalv25_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,zprg,
             fd.close()
