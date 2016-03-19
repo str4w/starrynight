@@ -212,17 +212,17 @@ class artist:
                 circ[3]=-circ[3]
             c=self.toColorSubspace(circ[4:7])
             s+="(%d,%d,%d,%d,%d,%d,%d)"%(circ[0],circ[1],circ[2],circ[3],c[0],c[1],circ[7])
-        prg ="import cv2,numpy as n\n"
+        prg ="import cv2 as v,numpy as n\n"
         prg+="z=n.ones((320,386,3),'u1')\n"
         prg+="z[:]=%d,%d,%d\n"%(xopt[1],xopt[2],xopt[3])
         prg+="z[%d:]=%d,%d,%d\n"%(xopt[0],xopt[4],xopt[5],xopt[6])
         prg+="for p,q,x,y,c,d,r in [%s]:\n"%s
         prg+=" for k in range(31):\n"
-        prg+="  cv2.circle(z,(p+x*k/30,q+y*k/30),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
+        prg+="  v.circle(z,(p+x*k/30,q+y*k/30),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
         if not blurSize is None:
-          prg+="cv2.imwrite('a.png',cv2.blur(z,(%d,%d)))\n"%(blurSize,blurSize)
+          prg+="v.imwrite('a.png',v.blur(z,(%d,%d)))\n"%(blurSize,blurSize)
         else:
-          prg+="cv2.imwrite('a.png',z)\n"
+          prg+="v.imwrite('a.png',z)\n"
         return prg
 
 # exhaustive line search over integers
@@ -346,11 +346,12 @@ def compressProgram(prg):
            l=re.sub('^ +',"",l)
            l=re.sub('p\\+',"a%m-h+",l)
            l=re.sub('q\\+',"b%m-h+",l)
+           l=re.sub('1.0\\*',"",l)
            l=re.sub('([^0-9])0(\.[0-9])','\\1\\2',l)
            cprg+=l+'\n'
        else:
            cprg+=l+'\n'
-   return cprg
+   return cprg[:-2] # two newlines...
 
 filtersize=3
 # perform the optimization, up to iterations number of circles
@@ -489,6 +490,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
 sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
 pfd=open("foundparamsv12_0.txt")
+#foundparamsv13final_%d.txt
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -501,13 +503,15 @@ z=anArtist.doit(params)
 s=score(z,orig)
 #prg=anArtist.makeProgram(params)
 #zprg=compressProgram(prg)
-#print i,s,len(prg),len(zprg)
-#fd=open("draw_finalv13.py",'w')
+#print s,len(prg),len(zprg)
+#fd=open("draw_test.py",'w')
 #print >>fd,prg,
 #fd.close()
-#fd=open("cdraw_finalv13.py",'w')
+#fd=open("cdraw_test.py",'w')
 #print >>fd,zprg,
 #fd.close()
+
+
 def optimizeme(p):
    img=anArtist.doit(p)
    s=score(img,orig)+regularizer(p,orig)
@@ -539,10 +543,10 @@ pfd.close()
 
 
 anArtist.doit(x)
-for f in [1,3,5,7]:
+for f in [1,3]:
     filtersize=f
     for tries in range(2):
-        x,b=searchForParameters("outputv13_%d"%tries,orig,params,bounds,50)
+        x,b=searchForParameters("outputv14_%d_%d"%(tries,f),orig,params,bounds,50)
         baseparams=x[:8]
         circles=[x[i:i+8] for i in range(8,len(x),8)]
         basebounds=b[:8]
@@ -585,12 +589,12 @@ for f in [1,3,5,7]:
                     break
                 
         
-    pfd=open("foundparamsv13_%d.txt"%tries,'w')
+    pfd=open("foundparamsv14_%d.txt"%f,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
     params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-    pfd=open("foundparamsv13final_%d.txt"%tries,'w')
+    pfd=open("foundparamsv14final_%d.txt"%f,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
@@ -600,16 +604,9 @@ for f in [1,3,5,7]:
     print "Achieved final score:",s
     print "In program of size:",len(zprg)
     if len(zprg) <= 1024:
-        fd=open("draw_finalv13.py",'w')
+        fd=open("draw_finalv14_%d.py"%f,'w')
         print >>fd,prg,
         fd.close()
-        fd=open("cdraw_finalv13.py",'w')
+        fd=open("cdraw_finalv14_%d.py"%f,'w')
         print >>fd,zprg,
         fd.close()
-
-
-
-
- 
-
-    
