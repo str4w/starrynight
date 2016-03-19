@@ -491,7 +491,7 @@ sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
 pfd=open("foundparamsv16final_1.txt") #4882
 pfd=open("foundparamsv15final_1.txt") #4776
-#foundparamsv13final_%d.txt
+pfd=open("foundparamsv17final_1_1024.txt") #4769
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -510,11 +510,11 @@ def optimizeme(p):
    return s  
 
 for sizelimit in [1100,1024]:
-    for f in [15,10,5,1]:
+    for f in [20,15,10,5,1]:
         filtersize=f
         for tries in range(2):
             x=params[:]
-            x,b=searchForParameters("outputv17_%d_%d"%(tries,f),orig,params,bounds,25)
+            x,b=searchForParameters("outputv18_%d_%d"%(tries,f),orig,params,bounds,50)
             baseparams=x[:8]
             circles=[x[i:i+8] for i in range(8,len(x),8)]
             basebounds=b[:8]
@@ -605,12 +605,12 @@ for sizelimit in [1100,1024]:
                     bounds.extend(bcircle[c])
                     
             
-        pfd=open("foundparamsv17_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv18_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
         params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-        pfd=open("foundparamsv17final_%d_%d.txt"%(f,sizelimit),'w')
+        pfd=open("foundparamsv18final_%d_%d.txt"%(f,sizelimit),'w')
         print >>pfd,params
         print >>pfd,bounds
         pfd.close()
@@ -620,9 +620,9 @@ for sizelimit in [1100,1024]:
         print "Achieved final score:",s
         print "In program of size:",len(zprg)
         if len(zprg) <= 1024:
-            fd=open("draw_finalv17_%d_%d.py"%(f,sizelimit),'w')
+            fd=open("draw_finalv18_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,prg,
             fd.close()
-            fd=open("cdraw_finalv17_%d_%d.py"%(f,sizelimit),'w')
+            fd=open("cdraw_finalv18_%d_%d.py"%(f,sizelimit),'w')
             print >>fd,zprg,
             fd.close()
