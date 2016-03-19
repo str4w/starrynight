@@ -46,6 +46,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import optimize
+from scipy import signal
 from skimage import filters
 from skimage.morphology import disk as mcircle
 from skimage.filters import rank
@@ -255,8 +256,8 @@ def localopt(f,params,bounds,include,step):
                    par=lparams[:]
                    par[i]=z
                    return f(par)
-               l=max(bounds[i][0],p-2*step)
-               h=min(bounds[i][1],p+2*step)
+               l=max(bounds[i][0],p-3*step)
+               h=min(bounds[i][1],p+3*step)
                p2,v2=integerOptimize1D(loc,l,h,step)
                if v2<cv:
                    cv=v2
@@ -334,26 +335,29 @@ def compressProgram(prg):
          #cprg+="           print \"\"\n"
          #cprg+="print \"\\n\",len(s)\n"
          cprg+="m,h=512,31\n"
-         cprg+="for a,b,c,d,r in[struct.unpack('HHBBB',s[i:i+7])for i in range(0,%d,7)]:\n"%len(dataAsPacked)
+         cprg+="for a,b,c,d,r in[struct.unpack('HHBBB',s[7*i:7*i+7])for i in range(%d)]:\n"%(len(dataAsPacked)/7)
          #cprg+=" p=a%m-50\n"
          #cprg+=" q=b%m-50\n"
          cprg+=" x,y=a/m-h,b/m-h\n"
        elif re.search("range\\(31\\)",l):
            l=re.sub("31","h",l)
-           cprg+=l+'\n'
+           cprg+=l#+'\n'
        elif re.search("p\\+x",l):
+           l=re.sub('^ +',"",l)
            l=re.sub('p\\+',"a%m-h+",l)
-           l=re.sub('q\\+',"b%m-h+",l)# prg+="  cv2.circle(z,(p+x*k/30,q+y*k/30),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
+           l=re.sub('q\\+',"b%m-h+",l)
+           l=re.sub('([^0-9])0(\.[0-9])','\\1\\2',l)
            cprg+=l+'\n'
        else:
            cprg+=l+'\n'
    return cprg
 
+filtersize=3
 # perform the optimization, up to iterations number of circles
 # store the results in outdir
 def searchForParameters(outdir,orig,params0,bounds,iterations):    
     assert len(params0)==len(bounds)
-    
+    global filtersize
     if os.path.exists(outdir):
         shutil.rmtree(outdir)
     os.mkdir(outdir)
@@ -380,17 +384,28 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
     for q in range(iterations):
         lastscore=s
         itercount=0
-        filtersize=1
+        f=filtersize
         while itercount<10:
             img=anArtist.doit(xopt)
-            z=img.astype(np.float32)-orig.astype(np.float32)
-            shift=np.min(z)
-            scale=np.max(z)-shift
-            z=z-shift
-            z=z/scale
-            cv2.imwrite(outdir+'/error_%03d_prefilter.png'%(q+2),z*255)
-            z=np.sum(np.abs(filters.gaussian_filter(z,filtersize,mode='constant',cval=-shift/scale)*scale+shift)**2,2)
+            err=img.astype(np.float32)-orig.astype(np.float32)
+            z=np.zeros_like(err)
+            z2=np.zeros_like(err)
+            kernel=mcircle(f,np.float)
+            for i in range(3):
+               z[:,:,i]=signal.convolve2d(err[:,:,i],kernel,'same')
+               z2[:,:,i]=signal.convolve2d(err[:,:,i]**2,kernel,'same')
+            qm=z/np.sum(kernel)   
+            qs=z2/np.sum(kernel)-qm**2 +1
+            #print np.min(qs),np.max(qs)
+            z=np.sum(np.abs(qm/np.sqrt(qs)),2)
             z=z/np.max(z)
+#            shift=np.min(z)
+#            scale=np.max(z)-shift
+#            z=z-shift
+#            z=z/scale
+            cv2.imwrite(outdir+'/error_%03d_prefilter.png'%(q+2),(err-np.min(err))/(np.max(err)-np.min(err))*255)
+            #z=np.sum(np.abs(filters.gaussian_filter(z,filtersize,mode='constant',cval=-shift/scale)*scale+shift)**2,2)
+            #z=z/np.max(z)
             cv2.imwrite(outdir+'/error_%03d_postfilter.png'%(q+2),z*255)
             idx0=np.unravel_index(np.argmax(z),z.shape)
             
@@ -441,12 +456,12 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
                 print "Rejecting last circle as it is useless"
                 print "score with",s
                 print "score without",stry
-                print "Full params were",xopt
+#                print "Full params were",xopt
                 xopt=xtry
                 bounds=bounds[:-8]
-                filtersize=filtersize-1
-                if filtersize<1: 
-                    filtersize=10
+                f=f-1
+                if f<1: 
+                    f=10
 
         #print "Found",xopt
         print "-------------------------------------"
@@ -473,7 +488,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
 
 sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
-pfd=open("foundparamsv10_2.txt")
+pfd=open("foundparamsv12_0.txt")
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -484,10 +499,27 @@ exec("bounds="+bstr)
 anArtist=artist(orig)
 z=anArtist.doit(params)
 s=score(z,orig)
+#prg=anArtist.makeProgram(params)
+#zprg=compressProgram(prg)
+#print i,s,len(prg),len(zprg)
+#fd=open("draw_finalv13.py",'w')
+#print >>fd,prg,
+#fd.close()
+#fd=open("cdraw_finalv13.py",'w')
+#print >>fd,zprg,
+#fd.close()
+def optimizeme(p):
+   img=anArtist.doit(p)
+   s=score(img,orig)+regularizer(p,orig)
+   return s  
 params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
 z=anArtist.doit(params)
 s2=score(z,orig)
 print "Started with score",s,"optimized to",s2
+pfd=open("foundparamsv13_first.txt",'w')
+print >>pfd,params
+print >>pfd,bounds
+pfd.close()
 
 
 #mval=np.mean(orig,(0,1))
@@ -506,72 +538,78 @@ print "Started with score",s,"optimized to",s2
 #pfd.close()
 
 
-#anArtist.doit(x)
-for tries in range(2):
-    x,b=searchForParameters("outputv12_%d"%tries,orig,params,bounds,20)
-    baseparams=x[:8]
-    circles=[x[i:i+8] for i in range(8,len(x),8)]
-    basebounds=b[:8]
-    bcircle=[b[i:i+8] for i in range(8,len(b),8)]
-    deltas=[]
-    lastscore=np.inf
-    for i in range(len(circles)+1):
-        params=baseparams[:]
-        for c in range(i):
-            params.extend(circles[c])
-        z=anArtist.doit(params)
-        s=score(z,orig)
-        if i>0:
-            deltas.append(lastscore-s)
-        prg=anArtist.makeProgram(params)
-        zprg=compressProgram(prg)
-        print i,s,lastscore-s,len(prg),len(zprg)
-        lastscore=s
-        
-    print "--------------------------------------------------------------"
-    includeCircle=[True]*len(circles)
-    for i in range(len(circles)/2):
-        r=np.argmin(deltas)
-        print "removing circle",r,"diff",deltas[r]
-        deltas[r]=999999999.
-        includeCircle[r]=False
-        params=baseparams[:]
-        bounds=basebounds[:]
-        for c in range(len(circles)):
-            if includeCircle[c]:
+anArtist.doit(x)
+for f in [1,3,5,7]:
+    filtersize=f
+    for tries in range(2):
+        x,b=searchForParameters("outputv13_%d"%tries,orig,params,bounds,50)
+        baseparams=x[:8]
+        circles=[x[i:i+8] for i in range(8,len(x),8)]
+        basebounds=b[:8]
+        bcircle=[b[i:i+8] for i in range(8,len(b),8)]
+        deltas=[]
+        lastscore=np.inf
+        for i in range(len(circles)+1):
+            params=baseparams[:]
+            for c in range(i):
                 params.extend(circles[c])
-                bounds.extend(bcircle[c])
-        z=anArtist.doit(params)
-        s=score(z,orig)
-        prg=anArtist.makeProgram(params)
-        zprg=compressProgram(prg)
-        print i,s,lastscore-s,len(prg),len(zprg)
-        lastscore=s
-        if len(zprg) <= sizelimit:
-    #        def optimizeme(p):
-    #           img=anArtist.doit(p)
-    #           s=score(img,orig)+regularizer(p,orig)
-    #           return s  
-    #        xopt=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-    #        s=score(z,orig)
-    #        prg=anArtist.makeProgram(params)
-    #        zprg=compressProgram(prg)
-    #        print "Achieved final score:",s
-    #        print "In program of size:",len(zprg)
-    #        if len(zprg) <= 1024:
-    #            fd=open("draw_finalv10.py",'w')
-    #            print >>fd,prg,
-    #            fd.close()
-    #            fd=open("cdraw_finalv10.py",'w')
-    #            print >>fd,zprg,
-    #            fd.close()
-                break
+            z=anArtist.doit(params)
+            s=score(z,orig)
+            if i>0:
+                deltas.append(lastscore-s)
+            prg=anArtist.makeProgram(params)
+            zprg=compressProgram(prg)
+            print i,s,lastscore-s,len(prg),len(zprg)
+            lastscore=s
             
-    
-    pfd=open("foundparamsv12_%d.txt"%tries,'w')
+        print "--------------------------------------------------------------"
+        includeCircle=[True]*len(circles)
+        for i in range(len(circles)/2):
+            r=np.argmin(deltas)
+            print "removing circle",r,"diff",deltas[r]
+            deltas[r]=999999999.
+            includeCircle[r]=False
+            params=baseparams[:]
+            bounds=basebounds[:]
+            for c in range(len(circles)):
+                if includeCircle[c]:
+                    params.extend(circles[c])
+                    bounds.extend(bcircle[c])
+            z=anArtist.doit(params)
+            s=score(z,orig)
+            prg=anArtist.makeProgram(params)
+            zprg=compressProgram(prg)
+            print i,s,lastscore-s,len(prg),len(zprg)
+            lastscore=s
+            if len(zprg) <= sizelimit:
+                    break
+                
+        
+    pfd=open("foundparamsv13_%d.txt"%tries,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
+    params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
+    pfd=open("foundparamsv13final_%d.txt"%tries,'w')
+    print >>pfd,params
+    print >>pfd,bounds
+    pfd.close()
+    s=score(z,orig)
+    prg=anArtist.makeProgram(params)
+    zprg=compressProgram(prg)
+    print "Achieved final score:",s
+    print "In program of size:",len(zprg)
+    if len(zprg) <= 1024:
+        fd=open("draw_finalv13.py",'w')
+        print >>fd,prg,
+        fd.close()
+        fd=open("cdraw_finalv13.py",'w')
+        print >>fd,zprg,
+        fd.close()
+
+
+
+
  
 
     
