@@ -489,7 +489,7 @@ def searchForParameters(outdir,orig,params0,bounds,iterations):
 
 sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
-pfd=open("foundparamsv12_0.txt")
+pfd=open("foundparamsv14final_3.txt")
 #foundparamsv13final_%d.txt
 xstr=pfd.readline()
 bstr=pfd.readline()
@@ -520,7 +520,7 @@ params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
 z=anArtist.doit(params)
 s2=score(z,orig)
 print "Started with score",s,"optimized to",s2
-pfd=open("foundparamsv13_first.txt",'w')
+pfd=open("foundparamsv15_first.txt",'w')
 print >>pfd,params
 print >>pfd,bounds
 pfd.close()
@@ -546,7 +546,8 @@ anArtist.doit(x)
 for f in [1,3]:
     filtersize=f
     for tries in range(2):
-        x,b=searchForParameters("outputv14_%d_%d"%(tries,f),orig,params,bounds,50)
+        x=params[:]
+        x,b=searchForParameters("outputv15_%d_%d"%(tries,f),orig,params,bounds,50)
         baseparams=x[:8]
         circles=[x[i:i+8] for i in range(8,len(x),8)]
         basebounds=b[:8]
@@ -565,6 +566,20 @@ for f in [1,3]:
             zprg=compressProgram(prg)
             print i,s,lastscore-s,len(prg),len(zprg)
             lastscore=s
+        z=anArtist.doit(x)
+        lastscore=score(z,orig)
+        deltas2=[]
+        for i in range(len(circles)):
+            params=baseparams[:]
+            for c in range(len(circles)):
+                if c != i:
+                    params.extend(circles[c])
+            z=anArtist.doit(params)
+            s=score(z,orig)
+            deltas2.append(s-lastscore)
+            prg=anArtist.makeProgram(params)
+            zprg=compressProgram(prg)
+            print i,s,deltas[i],s-lastscore,len(prg),len(zprg)
             
         print "--------------------------------------------------------------"
         includeCircle=[True]*len(circles)
@@ -589,12 +604,12 @@ for f in [1,3]:
                     break
                 
         
-    pfd=open("foundparamsv14_%d.txt"%f,'w')
+    pfd=open("foundparamsv15_%d.txt"%f,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
     params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-    pfd=open("foundparamsv14final_%d.txt"%f,'w')
+    pfd=open("foundparamsv15final_%d.txt"%f,'w')
     print >>pfd,params
     print >>pfd,bounds
     pfd.close()
@@ -604,9 +619,9 @@ for f in [1,3]:
     print "Achieved final score:",s
     print "In program of size:",len(zprg)
     if len(zprg) <= 1024:
-        fd=open("draw_finalv14_%d.py"%f,'w')
+        fd=open("draw_finalv15_%d.py"%f,'w')
         print >>fd,prg,
         fd.close()
-        fd=open("cdraw_finalv14_%d.py"%f,'w')
+        fd=open("cdraw_finalv15_%d.py"%f,'w')
         print >>fd,zprg,
         fd.close()
