@@ -182,9 +182,9 @@ class artist:
                     circ[2]=-circ[2]
                     circ[3]=-circ[3]
                 cv2.circle(img,(circ[0],circ[1]),circ[7],self.fromColorSubspace(self.toColorSubspace(circ[4:7])),-1)
-                for j in range(31):
-                    r=circ[0]+circ[2]*j//30 
-                    c=circ[1]+circ[3]*j//30 
+                for j in range(62):
+                    r=circ[0]+circ[2]*j//62 
+                    c=circ[1]+circ[3]*j//62 
                     cv2.circle(img,(r,c),circ[7],self.fromColorSubspace(self.toColorSubspace(circ[4:7])),-1)
                 self.cache[i]=(circ,img.copy())
         if not blurSize is None:
@@ -217,8 +217,8 @@ class artist:
         prg+="z[:]=%d,%d,%d\n"%(xopt[1],xopt[2],xopt[3])
         prg+="z[%d:]=%d,%d,%d\n"%(xopt[0],xopt[4],xopt[5],xopt[6])
         prg+="for p,q,x,y,c,d,r in [%s]:\n"%s
-        prg+=" for k in range(31):\n"
-        prg+="  v.circle(z,(p+x*k/30,q+y*k/30),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
+        prg+=" for k in range(62):\n"
+        prg+="  v.circle(z,(p+x*k/62,q+y*k/62),r,n.clip((%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d,%.1f*c%+.1f*d%+d),0,255),-1)\n"%(self.rmtx[0,0],self.rmtx[0,1],self.roff[0],self.rmtx[1,0],self.rmtx[1,1],self.roff[1],self.rmtx[2,0],self.rmtx[2,1],self.roff[2])
         if not blurSize is None:
           prg+="v.imwrite('a.png',v.blur(z,(%d,%d)))\n"%(blurSize,blurSize)
         else:
@@ -251,6 +251,7 @@ def localopt(f,params,bounds,include,step):
         stepped=False
         for i in range(len(lparams)):
            if include[i]:
+               print "Optimizing parameter",i
                p=lparams[i]
                def loc(z):
                    par=lparams[:]
@@ -302,10 +303,10 @@ def compressProgram(prg):
    dataAsPacked=bytearray("")
    for d in dataAsList:
        try:
-          dataAsPacked+=struct.pack("HHBBB",d[0]+31+(d[2]+31)*512,d[1]+31+(d[3]+31)*512,d[4],d[5],d[6])
+          dataAsPacked+=struct.pack("HHBBB",d[0]+62+(d[2]+62)*512,d[1]+62+(d[3]+62)*512,d[4],d[5],d[6])
        except:
           print "bad datum",d
-          print "becomes",d[0]+31+(d[2]+31)*512,d[1]+31+(d[3]+31)*512,d[4],d[5],d[6]
+          print "becomes",d[0]+62+(d[2]+62)*512,d[1]+62+(d[3]+62)*512,d[4],d[5],d[6]
           raise Exception("cantpack")
    global packcount
    packcount=0   
@@ -334,18 +335,19 @@ def compressProgram(prg):
          #cprg+="       if i%10==9:\n"
          #cprg+="           print \"\"\n"
          #cprg+="print \"\\n\",len(s)\n"
-         cprg+="m,h=512,31\n"
+         cprg+="m,h=512,62\n"
          cprg+="for a,b,c,d,r in[struct.unpack('HHBBB',s[7*i:7*i+7])for i in range(%d)]:\n"%(len(dataAsPacked)/7)
          #cprg+=" p=a%m-50\n"
          #cprg+=" q=b%m-50\n"
          cprg+=" x,y=a/m-h,b/m-h\n"
-       elif re.search("range\\(31\\)",l):
-           l=re.sub("31","h",l)
+       elif re.search("range\\(62\\)",l):
+           l=re.sub("62","h",l)
            cprg+=l#+'\n'
        elif re.search("p\\+x",l):
            l=re.sub('^ +',"",l)
            l=re.sub('p\\+',"a%m-h+",l)
            l=re.sub('q\\+',"b%m-h+",l)
+           l=re.sub('/62',"/h",l)
            l=re.sub('1.0\\*',"",l)
            l=re.sub('([^0-9])0(\.[0-9])','\\1\\2',l)
            cprg+=l+'\n'
@@ -491,7 +493,7 @@ sizelimit=1024
 orig=cv2.imread('ORIGINAL.png')
 pfd=open("foundparamsv16final_1.txt") #4882
 pfd=open("foundparamsv15final_1.txt") #4776
-pfd=open("foundparamsv17final_1_1024.txt") #4769
+pfd=open("foundparamsv17final_1_1100.txt") #----
 xstr=pfd.readline()
 bstr=pfd.readline()
 pfd.close()
@@ -499,130 +501,181 @@ pfd.close()
 #exec("b="+bstr)
 exec("params="+xstr)
 exec("bounds="+bstr)
+baseparams=params[:8]
+circles=[params[i:i+8] for i in range(8,len(params),8)]
+basebounds=bounds[:8]
+bcircle=[bounds[i:i+8] for i in range(8,len(bounds),8)]
+
+print "There are %d circles"%len(circles)
+for i in range(len(circles)):
+    for j in [0,1,2,3,7]:
+        if circles[i][j]<=bcircle[i][j][0] or circles[i][j]>=bcircle[i][j][1]:
+            print "Circle %d hits bounds on element %d"%(i,j)
+            for k in range(8):
+                print circles[i][k],bcircle[i][k]
+            break
+
+
 anArtist=artist(orig)
 z=anArtist.doit(params)
 s=score(z,orig)
 print "Starting with score:",s
+prg=anArtist.makeProgram(params)
+zprg=compressProgram(prg)
+fd=open("draw_origv19.py",'w')
+print >>fd,prg,
+fd.close()
+fd=open("cdraw_origv19.py",'w')
+print >>fd,zprg,
+fd.close()
+
+basebounds=bounds[:8]
+bcircle2=[[(-60,orig.shape[1]+60),(-60,orig.shape[0]+60),(-60,60),(-60,60),(0,255),(0,255),(0,255),(1,255)] for i in range(8,len(bounds),8)]
+newbounds=basebounds[:]
+for b in bcircle2:
+    newbounds.extend(b)
 
 def optimizeme(p):
    img=anArtist.doit(p)
    s=score(img,orig)+regularizer(p,orig)
    return s  
+pfd=open("foundparamsv19.txt",'w')
+print >>pfd,params
+print >>pfd,bounds
+pfd.close()
+params=localopt(optimizeme,params,newbounds,[True,]*len(bounds),1)
+s=score(anArtist.doit(params),orig)
+prg=anArtist.makeProgram(params)
+zprg=compressProgram(prg)
+pfd=open("foundparamsv19final.txt",'w')
+print >>pfd,params
+print >>pfd,bounds
+pfd.close()
+fd=open("draw_finalv19.py",'w')
+print >>fd,prg,
+fd.close()
+fd=open("cdraw_finalv19.py",'w')
+print >>fd,zprg,
+fd.close()
+print "Achieved final score:",s
+print "In program of size:",len(zprg)
 
-for sizelimit in [1100,1024]:
-    for f in [20,15,10,5,1]:
-        filtersize=f
-        for tries in range(2):
-            x=params[:]
-            x,b=searchForParameters("outputv18_%d_%d"%(tries,f),orig,params,bounds,50)
-            baseparams=x[:8]
-            circles=[x[i:i+8] for i in range(8,len(x),8)]
-            basebounds=b[:8]
-            bcircle=[b[i:i+8] for i in range(8,len(b),8)]
-            print "--------BUBBLESORT--------------------------------------------"
-            z=anArtist.doit(x)
-            s=score(z,orig)
-            swaps=1
-            while swaps>0:
-                swaps=0
-                for i in range(2,len(circles)+1):
-                    params=baseparams[:]
-                    for c in range(i-2):
-                        params.extend(circles[c])
-                    p1=params[:]
-                    p2=params[:]
-                    p1.extend(circles[i-2])
-                    p1.extend(circles[i-1])
-                    p2.extend(circles[i-1])
-                    p2.extend(circles[i-2])
-                    s1=score(anArtist.doit(p1),orig)
-                    s2=score(anArtist.doit(p2),orig)
-                    l1=len(compressProgram(anArtist.makeProgram(p1)))
-                    l2=len(compressProgram(anArtist.makeProgram(p2)))
-                    if s2<s1 or (abs(s1-s2)<1 and l2<l1):
-                        print "Swapping circle",i-2,"with circle",i-1,"for score change",s1,s2,"length change",l1,l2
-                        tmp=circles[i-1]
-                        circles[i-1]=circles[i-2]
-                        circles[i-2]=tmp
-                        tmp=bcircle[i-1]
-                        bcircle[i-1]=bcircle[i-2]
-                        bcircle[i-2]=tmp
-                        swaps=1
-            params=baseparams[:]
-            for c in circles:
-                params.extend(c)
-            sfinal=score(anArtist.doit(params),orig)
-            print "Beginning score",s,"final score",sfinal
-                
-    
-            print "--------DELTAS    --------------------------------------------"
-            deltas=[]
-            lastscore=np.inf
-            for i in range(len(circles)+1):
-                params=baseparams[:]
-                for c in range(i):
-                    params.extend(circles[c])
-                z=anArtist.doit(params)
-                s=score(z,orig)
-                if i>0:
-                    deltas.append(lastscore-s)
-                prg=anArtist.makeProgram(params)
-                zprg=compressProgram(prg)
-                print i,s,lastscore-s,len(prg),len(zprg)
-                lastscore=s
-                
-            print "--------------------------------------------------------------"
-            includeCircle=[True]*len(circles)
-            for i in range(len(circles)/2):
-                r=np.argmin(deltas)
-                print "removing circle",r,"diff",deltas[r]
-                olddelta=deltas[r]
-                deltas[r]=999999999.
-                nextr=np.argmin(deltas)
-                includeCircle[r]=False
-                params=baseparams[:]
-                for c in range(len(circles)):
-                    if includeCircle[c]:
-                        params.extend(circles[c])
-                z=anArtist.doit(params)
-                s=score(z,orig)
-                prg=anArtist.makeProgram(params)
-                zprg=compressProgram(prg)
-                print i,s,lastscore-s,len(prg),len(zprg)
-                if s-lastscore > deltas[nextr]:
-                    print "Change is worse than next circle, reject change"
-                    includeCircle[r]=True
-                    deltas[r]=s-lastscore
-                else:
-                    lastscore=s
-                    if len(zprg) <= sizelimit:
-                        break
-            params=baseparams[:]
-            bounds=basebounds[:]
-            for c in range(len(circles)):
-                if includeCircle[c]:
-                    params.extend(circles[c])
-                    bounds.extend(bcircle[c])
-                    
-            
-        pfd=open("foundparamsv18_%d_%d.txt"%(f,sizelimit),'w')
-        print >>pfd,params
-        print >>pfd,bounds
-        pfd.close()
-        params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
-        pfd=open("foundparamsv18final_%d_%d.txt"%(f,sizelimit),'w')
-        print >>pfd,params
-        print >>pfd,bounds
-        pfd.close()
-        s=score(z,orig)
-        prg=anArtist.makeProgram(params)
-        zprg=compressProgram(prg)
-        print "Achieved final score:",s
-        print "In program of size:",len(zprg)
-        if len(zprg) <= 1024:
-            fd=open("draw_finalv18_%d_%d.py"%(f,sizelimit),'w')
-            print >>fd,prg,
-            fd.close()
-            fd=open("cdraw_finalv18_%d_%d.py"%(f,sizelimit),'w')
-            print >>fd,zprg,
-            fd.close()
+
+#
+#for sizelimit in [1100,1024]:
+#    for f in [20,15,10,5,1]:
+#        filtersize=f
+#        for tries in range(2):
+#            x=params[:]
+#            x,b=searchForParameters("outputv19_%d_%d"%(tries,f),orig,params,bounds,50)
+#            baseparams=x[:8]
+#            circles=[x[i:i+8] for i in range(8,len(x),8)]
+#            basebounds=b[:8]
+#            bcircle=[b[i:i+8] for i in range(8,len(b),8)]
+#            print "--------BUBBLESORT--------------------------------------------"
+#            z=anArtist.doit(x)
+#            s=score(z,orig)
+#            swaps=1
+#            while swaps>0:
+#                swaps=0
+#                for i in range(2,len(circles)+1):
+#                    params=baseparams[:]
+#                    for c in range(i-2):
+#                        params.extend(circles[c])
+#                    p1=params[:]
+#                    p2=params[:]
+#                    p1.extend(circles[i-2])
+#                    p1.extend(circles[i-1])
+#                    p2.extend(circles[i-1])
+#                    p2.extend(circles[i-2])
+#                    s1=score(anArtist.doit(p1),orig)
+#                    s2=score(anArtist.doit(p2),orig)
+#                    l1=len(compressProgram(anArtist.makeProgram(p1)))
+#                    l2=len(compressProgram(anArtist.makeProgram(p2)))
+#                    if s2<s1 or (abs(s1-s2)<1 and l2<l1):
+#                        print "Swapping circle",i-2,"with circle",i-1,"for score change",s1,s2,"length change",l1,l2
+#                        tmp=circles[i-1]
+#                        circles[i-1]=circles[i-2]
+#                        circles[i-2]=tmp
+#                        tmp=bcircle[i-1]
+#                        bcircle[i-1]=bcircle[i-2]
+#                        bcircle[i-2]=tmp
+#                        swaps=1
+#            params=baseparams[:]
+#            for c in circles:
+#                params.extend(c)
+#            sfinal=score(anArtist.doit(params),orig)
+#            print "Beginning score",s,"final score",sfinal
+#                
+#    
+#            print "--------DELTAS    --------------------------------------------"
+#            deltas=[]
+#            lastscore=np.inf
+#            for i in range(len(circles)+1):
+#                params=baseparams[:]
+#                for c in range(i):
+#                    params.extend(circles[c])
+#                z=anArtist.doit(params)
+#                s=score(z,orig)
+#                if i>0:
+#                    deltas.append(lastscore-s)
+#                prg=anArtist.makeProgram(params)
+#                zprg=compressProgram(prg)
+#                print i,s,lastscore-s,len(prg),len(zprg)
+#                lastscore=s
+#                
+#            print "--------------------------------------------------------------"
+#            includeCircle=[True]*len(circles)
+#            for i in range(len(circles)/2):
+#                r=np.argmin(deltas)
+#                print "removing circle",r,"diff",deltas[r]
+#                olddelta=deltas[r]
+#                deltas[r]=999999999.
+#                nextr=np.argmin(deltas)
+#                includeCircle[r]=False
+#                params=baseparams[:]
+#                for c in range(len(circles)):
+#                    if includeCircle[c]:
+#                        params.extend(circles[c])
+#                z=anArtist.doit(params)
+#                s=score(z,orig)
+#                prg=anArtist.makeProgram(params)
+#                zprg=compressProgram(prg)
+#                print i,s,lastscore-s,len(prg),len(zprg)
+#                if s-lastscore > deltas[nextr]:
+#                    print "Change is worse than next circle, reject change"
+#                    includeCircle[r]=True
+#                    deltas[r]=s-lastscore
+#                else:
+#                    lastscore=s
+#                    if len(zprg) <= sizelimit:
+#                        break
+#            params=baseparams[:]
+#            bounds=basebounds[:]
+#            for c in range(len(circles)):
+#                if includeCircle[c]:
+#                    params.extend(circles[c])
+#                    bounds.extend(bcircle[c])
+#                    
+#            
+#        pfd=open("foundparamsv19_%d_%d.txt"%(f,sizelimit),'w')
+#        print >>pfd,params
+#        print >>pfd,bounds
+#        pfd.close()
+#        params=localopt(optimizeme,params,bounds,[True,]*len(bounds),1)
+#        pfd=open("foundparamsv19final_%d_%d.txt"%(f,sizelimit),'w')
+#        print >>pfd,params
+#        print >>pfd,bounds
+#        pfd.close()
+#        s=score(z,orig)
+#        prg=anArtist.makeProgram(params)
+#        zprg=compressProgram(prg)
+#        print "Achieved final score:",s
+#        print "In program of size:",len(zprg)
+#        if len(zprg) <= 1024:
+#            fd=open("draw_finalv19_%d_%d.py"%(f,sizelimit),'w')
+#            print >>fd,prg,
+#            fd.close()
+#            fd=open("cdraw_finalv19_%d_%d.py"%(f,sizelimit),'w')
+#            print >>fd,zprg,
+#            fd.close()
