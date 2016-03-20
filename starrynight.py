@@ -2,40 +2,8 @@
 """
 Created for code golf starry night
 http://codegolf.stackexchange.com/questions/69930/paint-starry-night-objectively-in-1kb-of-code
-
-Rupert Brooks, 15-FEB-2016
-
-The objective was to use an optimization approach, using drawing primitives, 
-not using a compressed or encoded version of the original image.  It seems
-that using image compression algorithms inevitably comes up with a better
-score (not surprising really).  However, it is aesthetically more interesting
-in some way to do it with drawing primitives.
-
-The drawing primitives are circles dragged between two points.  This looks 
-vaguely like brushstrokes, but was fairly easy to implement in a small number
-of bytes.
-
-A minimal amount of tuning to the Starry night picture was done.
-
-It starts out finding a horizon line, and then one circle is placed by hand.
-It really helps for this image to place a circle in this large dark area 
-early, but this is not a general approach.  The rest of the circles are 
-found by automated search.
-
-The optimization process is a pattern search, not a genetic algorithm as
-was used in many other entries.  The space being searched is integer, not
-continuous.  Intriguingly, searching in the compressed color space 
-significantly reduced the effectiveness of the approach, so the search is 
-done in RGB space, but the drawing process reduces the colors when it draws.
-
-The optimization goes past the final size required, and then removes low value
-primitives to get down to the necessary size.  This helps, because it has not
-necessarily found them in the most effective order. 
-
-Some really interesting ideas from other posts were adopted here
-- use of a blur to push the final score up a bit
-- use of binary code directly in the final python output
-- use of a 2D subspace of the color space
+See http://strawprojects.blogspot.ca/2016/03/art_20.html
+for discussion
 """
 
 import cv2
